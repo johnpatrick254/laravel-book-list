@@ -15,23 +15,22 @@ class BookController extends Controller
     public function index(Request $req)
     {
         $title = $req->input('title');
-        $filter = $req->input('filter','');
+        $filter = $req->input('filter', '');
 
         $books = Book::when($title, function (Builder $query, $title) {
             return $query->title($title);
         });
 
-        $books = match($filter){
-                 
-                "" => $books->latest(),
-                "popular_last_month" => $books->popularLastMonth(),
-                "popular_last_6month" => $books->popularLast6Month(),
-                "highest_rated_last_month" => $books->highestRatedLastMonth(),
-                "highest_rated_last_6month" => $books->highestRatedLast6Month(),
-                default => $books->latest(),
-            
+        $books = match ($filter) {
+
+            "" => $books->latest()->withAvgRating()->withReviewsCount(),
+            "popular_last_month" => $books->popularLastMonth(),
+            "popular_last_6month" => $books->popularLast6Month(),
+            "highest_rated_last_month" => $books->highestRatedLastMonth(),
+            "highest_rated_last_6month" => $books->highestRatedLast6Month(),
+            default => $books->latest()->withAvgRating()->withReviewsCount(),
         };
-       
+
         return view('books.index', ['books' => $books->paginate(10)]);
     }
 
@@ -54,12 +53,19 @@ class BookController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Book $book)
+    public function show(int $id)
     {
-$cacheKey = 'book:' . $book->id;
-$book =cache()->remember($cacheKey,3600,fn()=>$book->load(['reviews'=>fn($query)=>$query->latest()]));
-       return view('books.show',['book'=>$book]);
+        $cacheKey = 'book:' . $id;
+        $book = cache()->remember(
+            $cacheKey,
+            3600,
+            fn () =>
+            Book::with([
+                'reviews' => fn ($query) => $query->latest()
+            ])->withAvgRating()->withReviewsCount()->findOrFail($id)
+        );
 
+        return view('books.show', ['book' => $book]);
     }
 
     /**
